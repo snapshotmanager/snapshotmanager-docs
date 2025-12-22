@@ -136,8 +136,9 @@ home_list_style = "default"
 show_home_social_icons = true
 social_icons = [
   {path = "https://github.com/snapshotmanager", title = "GitHub", icon = "github"},
-  {path = "bmr@redhat.com", title = "Email", icon = "email"},
   {path = "https://github.com/snapshotmanager/snapm/wiki", title = "Wiki", icon = "wiki"},
+  {path = "https://x.com/snapshotmanager", title = "X", icon = "x"},
+  {path = "bmr@redhat.com", title = "Email", icon = "email"},
   {path = "/atom.xml", title = "RSS", icon = "rss"},
 ]
 taxonomies_desc = []
