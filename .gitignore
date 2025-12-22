@@ -1,0 +1,8 @@
+public/
+*.bib.bak
+*.lyx~
+*.lyx#
+*.pdf
+*.swp
+*.tex
+static/*.xml

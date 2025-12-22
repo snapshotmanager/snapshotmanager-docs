@@ -1,0 +1,108 @@
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>{% if page.title %}{{ page.title }}{% elif section.title %}{{ section.title }}{% else %}{{ config.title }}{% endif %}</title>
+
+
+{# Only for post page #}
+{% if page.taxonomies %}
+{% set tags = page.taxonomies.tags %}
+<meta name="keywords" content="{{ tags | join(sep=', ') }}">
+{% elif page.keywords %}
+<meta name="keywords" content="{{ page.keywords | join(sep=', ') }}">
+{% else %}
+<meta name="keywords" content="{{ config.extra.cela.default_keywords | default(value=["Rust zola blog", "Theme cela"]) | join(sep=', ') }}">
+{% endif %}
+
+
+{% if page.description %}
+<meta name="description" content="{{ page.description }}">
+{% elif section.description %}
+<meta name="description" content="{{ section.description }}">
+{% else %}
+<meta name="description" content="{{ config.description }}">
+{% endif %}
+
+{% if page.author %}
+<meta name="author" content="{{ page.author }}">
+{% elif section.author %}
+<meta name="author" content="{{ section.author }}">
+{% elif config.author %}
+<meta name="author" content="{{ config.author }}">
+{% endif %}
+
+
+
+
+{# Canonical: allow explicit override, then fall back to current page/section URL #}
+{% if page and page.extra and page.extra.canonical %}
+  <link rel="canonical" href="{{ page.extra.canonical }}">
+{% elif section and section.extra and section.extra.canonical %}
+  <link rel="canonical" href="{{ section.extra.canonical }}">
+{% elif page and page.path %}
+  {% set canonical_url = config.base_url ~ '/' ~ page.path %}
+  <link rel="canonical" href="{{ canonical_url }}">
+{% elif section and section.path %}
+  {% set canonical_url = config.base_url ~ '/' ~ section.path %}
+  <link rel="canonical" href="{{ canonical_url }}">
+{% else %}
+  <link rel="canonical" href="{{ current_url | default(value=config.base_url) }}">
+{% endif %}
+
+<link rel="stylesheet" href="{{ get_url(path='css/theme-vars.css') }}">
+<link rel="stylesheet" href="{{ get_url(path='css/theme-base.css') }}">
+<link rel="stylesheet" href="{{ get_url(path='css/theme-common.css') }}">
+<link rel="icon" href="{{ get_url(path=(config.extra.cela.favicon | default(value='favicon.ico'))) }}">
+<link rel="icon" type="image/png" sizes="16x16" href="{{ get_url(path=(config.extra.cela.favicon16x16 | default(value='favicon-16x16.png'))) }}">
+<link rel="icon" type="image/png" sizes="32x32" href="{{ get_url(path=(config.extra.cela.favicon32x32 | default(value='favicon-32x32.png'))) }}">
+<link rel="apple-touch-icon" href="{{ get_url(path=(config.extra.cela.apple_touch_icon | default(value='apple-touch-icon.png'))) }}">
+<meta name="theme-color" content="{{ config.extra.cela.theme_color | default(value='#2e2e33') }}">
+<meta name="msapplication-TileColor" content="{{ config.extra.cela.msapplication_TileColor | default(value='#2e2e33') }}">
+
+{% if config.generate_feeds %}
+{% for feed_filename in config.feed_filenames %}
+<link rel="alternate" type={% if feed_filename == "atom.xml" %}"application/atom+xml"{% else %}"application/rss+xml"{% endif %} title="RSS" href="{{ get_url(path=feed_filename) | safe }}">
+{% endfor %}
+{% endif %}
+
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+    </style>
+    {% if config.extra.cela.color.default_theme == "dark" %}
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(30, 32, 48);           /* macchiato-mantle */
+                --entry: rgb(36, 39, 58);           /* macchiato-base  */
+                --primary: rgb(202, 211, 245);      /* macchiato-text */
+                --secondary: rgb(184,192, 224);     /* macchiato-subtext1 */
+                --tertiary: rgb(54, 58, 79);        /* macchiato-surface0 */
+                --content: rgb(165, 173, 203);      /* macchiato-subtext0 */
+                --hljs-bg: rgb(24, 25, 38);         /* macchiato-crust */
+                --code-bg: rgb(24, 25, 38);         /* macchiato-crust */
+                --border: rgb(30, 32, 48);          /* macchiato-mantle */
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-track {
+                background: 0 0;
+            }
+
+            .list:not(.dark)::-webkit-scrollbar-thumb {
+                border-color: var(--theme);
+            }
+        }
+
+    </style>
+    {% endif %}
+</noscript>
+
+{% include "partials/extend_head.html" %}

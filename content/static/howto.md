@@ -1,0 +1,1747 @@
++++
+path = "/howto"
+title = "Snapshot Manager how-to/walkthrough"
+date = 2025-12-22
+toc = true
++++
+
+
+User Guide 
+
+This guide provides user documentation for the snapshot manager (snapm) tool. 
+
+Overview 
+
+Snapshot manager (snapm) is a tool for managing coordinated sets of snapshots on Linux systems. The snapm tool allows snapshots of multiple volumes to be captured at the same time, representing the system state at the time the snapshot set was created. The tool has a modular plugin architecture allowing different snapshot backends to be used together. Currently snapshots using LVM2 copy-on-write as well as thinly provisioned snapshots using both LVM2 and Stratis are supported. 
+
+Key Concepts 
+
+### Snapshot Sets
+
+Snapshot manager groups snapshots taken at the same moment in time into a named "snapshot set", or snapset. This allows the snapshots to be managed as a single unit and simplifies the management of snapshots of multiple volumes. Each snapshot set must contain at least one snapshot. 
+
+### Size Policies
+
+Size policies control the size of fixed-sized snapshots and check for available space when creating a snapshot set. Some snapshot implementations (Lvm2CoW) require a fixed size to be specified for the snapshot backstore when the snapshot is created. The default size allocated by snapshot manager is 2x the current file system usage, allowing the existing content of the volume to be overwritten twice before exhausting the snapshot space. Plugins for snapshot providers that do not require a fixed snapshot size will check that space is available for the requested size policy at snapshot set creation time. 
+
+Available size policies: 
+
+* **FIXED** - a fixed size given on the command line
+* **FREE** - a percentage fraction of the free space available
+* **USED** - a percentage fraction of the space currently used on the mount point (may be greater than 100%)
+* **SIZE** - a percentage fraction of the origin device size from 0 to 100%
+
+The FIXED size policy accepts optional units of KiB, MiB, GiB, TiB, PiB, EiB and ZiB. Units may be abbreviated to the first character. 
+
+The USED size policy can only be applied to mounted file systems. 
+
+Difference Engine 
+
+The Difference Engine is a core facility in `snapm` that allows for detailed comparisons between two snapshot sets, or between a snapshot set and the currently running system. 
+
+How it Works 
+
+The engine operates by recursively walking the file system trees of both the source and target. It performs a multi-stage analysis to identify changes: 
+
+* 
+**Entry Detection**: Identifies files, directories, and symlinks that have been added, removed, or modified. 
+
+
+* 
+**Move Detection**: By matching content hashes, the engine can identify files that have been renamed or moved between directories rather than simply being deleted and recreated. 
+
+
+* 
+**Metadata Analysis**: Detects changes in file permissions (mode), ownership (UID/GID), and extended attributes (xattrs). 
+
+
+* 
+**Content Comparison**: Performs deep content comparisons for regular files, including generating standard unified diffs for text files. 
+
+
+
+Output Formats and Use Cases 
+
+The Difference Engine supports several output formats via the `snapset diff` `--output-format` argument, each suited to different tasks: 
+
+* 
+**paths**: Useful for scripting, allowing you to pipe a list of changed files to other tools like `tar` or `rsync`. 
+
+
+* 
+**full**: Provides a detailed report including old and new file attributes (permissions, ownership, size, modification time) for every change. 
+
+
+* 
+**short**: A concise summary listing the change status code and path for each modified file. 
+
+
+* 
+**json**: Outputs the complete difference data as a JSON object, suitable for parsing by external tools and automation scripts. 
+
+
+* 
+**diff**: Generates a standard unified diff of content changes for modified files. This format is useful for generating patches or detailed content review. 
+
+
+* 
+**summary**: Brief summary of the count of different change types. Change types are colorized using the same coding as `tree` output. 
+
+
+* 
+**tree**: (Default) Displays changes in a hierarchical tree structure, similar to the standard `tree` command but annotated with change status. 
+
+
+
+In addition differences can be reported in a tabular format using the standard `snapm` reporting mechanism using the `snapset diffreport` command. The available `diffreport` report output fields are: 
+
+* **path**: Difference path (string)
+* **type**: Difference type (string)
+* **size_delta**: Diff size change (size)
+* **content**: Content changed (string)
+* **metadata**: Metadata changed (string)
+* **mode_old**: Old path mode (string)
+* **mode_new**: New path mode (string)
+* **category**: File category (string)
+* **movedfrom**: Move source (string)
+* **movedto**: Move destination (string)
+* **diffsummary**: Summary of content differences (string)
+* **hash_old**: Old file content hash (string)
+* **hash_new**: New file content hash (string)
+* **filetype**: File type (string)
+* **mtime_old**: Old modification time (time)
+* **mtime_new**: New modification time (time)
+
+### Comparison Modes
+
+You can fine-tune the comparison using various flags:
+
+* 
+**Content-Only** (`-c`): Ignores all metadata changes and only reports files where the actual data has changed. 
+
+
+* 
+**Ignore Options**: Use `--ignore-timestamps`, `--ignore-permissions`, or `--ignore-ownership` to filter out "noise" during comparisons. 
+
+
+
+Performance and the Diff Cache 
+
+Walking large file systems and computing content hashes can be resource-intensive. To improve performance, `snapm` implements a **diffcache**. 
+
+* 
+**How it works**: When a comparison is performed, the results are compressed and stored in `/var/cache/snapm/diffcache`. 
+
+
+* 
+**Cache Reuse**: Subsequent `diff` or `diffreport` commands between the same two sets will load the results from the cache instead of re-scanning the file systems. 
+
+
+* 
+**Expiry**: By default, cache entries expire after **15 minutes**. This ensures that results remain fresh if the running system (`.`) is one of the comparison targets. Use `--cache-expires=EXPIRES_SECS` to override the default value (900s). 
+
+
+* 
+**Manual Control**: You can override the expiry or disable the cache entirely using the `--cache-mode={auto,never,always}` and `--cache-expires=EXPIRES_SECS` options. These options are mutually exclusive. 
+
+
+
+## Command Reference
+
+### The `snapm` Command
+
+The `snapm` command provides the CLI interface to the snapshot manager. It is able to create, delete, and display snapshots and snapshot sets and provides reports listing the snapshots, snapshot sets, and schedules available on the system. Each snapm command operates on a particular object type: a snapshot set, an individual snapshot, or a schedule. 
+
+```bash
+snapm snapset <command> <options>  # snapset command
+
+```
+
+```bash
+snapm snapshot <command> <options> # snapshot command
+
+```
+
+## Snapset Commands
+
+The `snapset` subcommand is used to create, delete, rename, activate, deactivate, list and display snapshot sets. 
+
+snapset create 
+
+Create a new snapshot set with the provided name and list of sources (mount point or block device paths):
+
+```bash
+snapm snapset create [-b|--bootable] [-r|--revert] [--size-policy policy] <name> <source> [<source> ...]
+
+```
+
+Per-source path size policies are specified by adding a ':' and the required policy to the corresponding mount point path, for example:
+
+```bash
+snapm snapset create backup /:2G /var:1G /home
+
+```
+
+```bash
+snapm snapset create backup /:25%FREE /var:25%FREE /home
+
+```
+
+```bash
+snapm snapset create backup /:100%USED /var:100%USED /home
+
+```
+
+```bash
+snapm snapset create backup /:100%SIZE /var:100%SIZE /home
+
+```
+
+If no size policy is specified the default is `200%USED` for mounted file systems and 25%SIZE for unmounted block devices. To ensure a volume can be completely overwritten specify `100%SIZE`. This requires more storage capacity but avoids the possibility of the snapshot running out of space. A default size policy for all source paths that do not specify an explicit per-path policy can be set with the `--size-policy` argument: 
+
+```bash
+snapm snapset create backup --size-policy 100%SIZE / /home /var
+
+```
+
+On success the `snapm snapset create` command displays the newly created snapshot set on stdout:
+
+```bash
+snapm snapset create -br --size-policy 100%USED backup / /home /var
+SnapsetName:      backup
+Sources:          /, /home, /var
+NrSnapshots:      3
+Time:             2024-12-05 19:10:44
+UUID:             d3f5e3cd-a383-5dba-b597-9134a2c426e9
+Status:           Active
+Autoactivate:     yes
+Bootable:         yes
+BootEntries:
+  SnapshotEntry:  f574a20
+  RevertEntry:    f428f9f
+
+```
+
+#### Autoindex for recurring snapshot sets
+
+The `--autoindex` argument allows creating a recurring snapshot set with a common basename and unique index (a non-negative integer).  This can be used to take regular snapshots with a common name:
+
+```bash
+snapm snapset create hourly --autoindex /:25%SIZE /var:25%SIZE
+SnapsetName:      hourly.3
+Sources:          /, /var
+NrSnapshots:      2
+Time:             2025-03-26 14:17:18
+UUID:             ae082452-7995-5316-ac65-388eadd9879c
+Status:           Active
+Autoactivate:     yes
+Bootable:         no
+
+```
+
+The basename and index values are available via the `snapset list` report:
+
+```bash
+snapm snapset list -o+basename,index
+SnapsetName  Time                 NrSnapshots Status  Sources  Basename     Index
+backup       2025-03-25 18:12:54            2 Invalid /, /var  backup           -
+hourly.0     2025-03-25 19:40:39            2 Invalid /, /var  hourly           0
+hourly.1     2025-03-26 14:17:11            2 Active  /, /var  hourly           1
+hourly.2     2025-03-26 14:17:15            2 Active  /, /var  hourly           2
+hourly.3     2025-03-26 14:17:18            2 Active  /, /var  hourly           3
+
+```
+
+snapset delete 
+
+Delete an existing snapset by name or uuid. 
+
+```bash
+snapm snapset delete <name|uuid>
+
+```
+
+snapset diff 
+
+Compare two snapshot sets, or a snapshot set and the running system. 
+
+```bash
+snapm snapset diff [options] <from> <to>
+
+```
+
+The `from` and `to` arguments specify the snapshot sets to compare. The special value `.` may be used to refer to the running system (the root file system).  The command detects added, removed, and modified files. File content comparisons can be performed to generate standard unified diffs. 
+
+Supported output formats (`-o`/`--output-format`) include: 
+
+* **paths** - A simple list of changed paths
+* **full** - Detailed change information
+* **short** - Abbreviated change summary
+* **json** - JSON formatted change data
+* **diff** - Standard unified diff of file content
+* **summary** - Brief summary of the count of different change types
+* **tree** - A hierarchical tree view of changes (default)
+
+The `-o`/`--output-format` option may be given multiple times to request different output formats for the same run. The `diff` and `summary` formats also accept an optional `--stat` option to enable `diffstat` style change summaries. The `json` output format supports `--pretty` to enable pretty-printing the JSON output. 
+
+Compare the snapshot set "backup" to the running system using a tree view: 
+
+```bash
+snapm snapset diff --output-format tree backup .
+
+```
+
+Generate a unified diff of content changes between two snapshot sets, ignoring file modification times to focus only on content: 
+
+```bash
+snapm snapset diff --output-format diff --ignore-timestamps weekly.0 weekly.1
+
+```
+
+Options are available to control the comparison:
+
+* `--content-only` / `-c`: Only check for file content changes
+* `--ignore-timestamps` / `-t`: Ignore modification times
+* `--ignore-permissions` / `-p`: Ignore permission changes
+* `--ignore-ownership` / `-w`: Ignore ownership changes
+* `--include-pattern` / `--exclude-pattern`: Filter paths using glob patterns
+
+#### Output Formats
+
+The `--output-format` argument controls the presentation of differences. Available formats are: 
+
+* **paths**: Lists modified paths, one per line. Useful for piping to other tools or scripts. 
+
+
+* 
+**full**: Provides a detailed report including old and new file attributes (permissions, ownership, size, modification time) for every change. 
+
+
+* 
+**short**: A concise summary listing the change status code and path for each modified file. 
+
+
+* 
+**json**: Outputs the complete difference data as a JSON object, suitable for parsing by external tools and automation scripts. 
+
+
+* 
+**diff**: Generates a standard unified diff of content changes for modified files. This format is useful for generating patches or detailed content review. 
+
+
+* 
+**summary**: Brief summary of the count of different change types. Change types are colorized using the same coding as `tree` output. 
+
+
+* 
+**tree**: (Default) Displays changes in a hierarchical tree structure, similar to the standard `tree` command but annotated with change status. The default if no `--output-format` option is given is `tree`. 
+
+
+
+#### Tree Output Legend
+
+The **tree** output format uses specific prefixes and colors (if enabled) to indicate the type of change: 
+
+* 
+`[+]` **Path added** (green): The file or directory is present in the target but not the source. 
+
+
+* 
+`[-]` **Path removed** (red): The file or directory is present in the source but not the target. 
+
+
+* 
+`[*]` **Path modified** (yellow): The file content or attributes have changed. 
+
+
+* 
+`[<]` **Path moved from** (cyan): The source path of a renamed or moved file. 
+
+
+* 
+`[>]` **Path moved to** (cyan): The destination path of a renamed or moved file. 
+
+
+* 
+`[!]` **Path file type changed** (blue): The file type (regular file, symlink, directory, etc.) has changed between source and target. 
+
+
+
+snapset diffreport 
+
+Generate a tabular report of differences between snapshot sets. 
+
+```bash
+snapm snapset diffreport [options] <from> <to>
+
+```
+
+This command performs the same comparison logic as `snapset diff` but formats the output as a column-based report. It accepts standard reporting arguments including `--options`, `--sort`, `--noheadings`, and `--json`. 
+
+```bash
+snapm snapset diffreport --json backup current
+
+```
+
+To list specific fields describing the changes:
+
+```bash
+snapm snapset diffreport -opath,state,size_diff old_snap new_snap
+
+```
+
+snapset rename 
+
+Rename an existing snapset. 
+
+```bash
+snapm snapset rename <old_name> <new_name>
+
+```
+
+snapset revert 
+
+Revert an existing snapset, re-setting the content of the origin volumes to the state they were in at the time the snapset was created. The snapset to be reverted may be specified either by its name or uuid. 
+
+```bash
+snapm snapset revert <name|uuid>
+
+```
+
+If the origins of the snapshot set are in use at the time of the revert the operation is deferred until the next time the snapshot set is activated (for example during a reboot). If a revert boot entry was created for the snapshot set the `revert` command will suggest booting into it to continue: 
+
+```bash
+snapm snapset revert upgrade
+WARNING - Snapshot set upgrade origin is in use: reboot required to complete revert
+Boot into 'Revert upgrade 2024-06-10 15:25:15 (6.8.9-300.fc40.x86_64)' to continue
+
+```
+
+snapset resize 
+
+Resize the members in an existing snapset, applying a new size policy to specified sources or applying a new default size policy to all snapshots within a snapset. 
+
+Resize the `/var` member of the snapshot set named upgrade to 100%SIZE: 
+
+```bash
+snapm snapset resize upgrade /var:100%SIZE
+
+```
+
+Resize each member of the snapshot set named backup to the 200%USED size policy:
+
+```bash
+snapm snapset resize backup --size-policy 200%USED
+
+```
+
+snapset split 
+
+Split snapshots from an existing snapshot set into a new snapshot set. Split the snapshot set named 'name' into a new snapshot set named 'new_name'. Each listed source from 'name' is split into the new snapshot set. Sources that are not listed on the command line remain part of the original snapshot set. It is an error to split all sources from a snapshot set: in this case use 'snapm snapset rename' instead. 
+
+To split the source "/home" from the existing snapshot set "upgrade" into a new snapshot set named "noupgrade": 
+
+```bash
+snapm snapset split upgrade noupgrade /home
+SnapsetName:      noupgrade
+Sources:          /home
+NrSnapshots:      1
+Time:             2025-03-31 20:21:29
+UUID:             30e69b86-5c48-5e5d-be1a-bf3d63aef8f7
+Status:           Inactive
+Autoactivate:     no
+Bootable:         no
+
+```
+
+snapset activate 
+
+Activate the members of an existing snapset, or all snapsets if no name or uuid argument is given. 
+
+```bash
+snapm snapset activate [<name|uuid>]
+
+```
+
+snapset deactivate 
+
+Deactivate the members of an existing snapset, or all snapsets if no name or uuid argument is given. 
+
+```bash
+snapm snapset deactivate [<name|uuid>]
+
+```
+
+snapset autoactivate 
+
+Enable or disable autoactivation for the snapshots in a snapshot set. 
+
+```bash
+snapm snapset autoactivate [--yes|--no] [<name|uuid>]
+
+```
+
+snapset list 
+
+List available snapsets matching selection criteria. 
+
+```bash
+snapm snapset list [<name|uuid>]
+
+```
+
+By default the information is presented as a tabular report with column headings indicating the meaning of each value. The default column selection includes the SnapsetName, Time, NrSnapshots, Status, and Sources fields: 
+
+```bash
+snapm snapset list
+SnapsetName  Time                 NrSnapshots Status  Sources
+backup       2024-12-05 19:14:03            3 Active  /, /home, /var
+upgrade      2024-12-05 19:14:09            2 Active  /, /var
+
+```
+
+Custom field specifications may be given with the `-o`/`--options` argument. To obtain a list of available fields run `snapm snapset list -ohelp`: 
+
+```bash
+snapm snapset list -ohelp
+Snapshot set Fields
+-------------------
+  name         - Snapshot set name [str]
+  uuid         - Snapshot set UUID [uuid]
+  timestamp    - Snapshot set creation time as a UNIX epoch value [num]
+  time         - Snapshot set creation time [time]
+  nr_snapshots - Number of snapshots [num]
+  sources      - Snapshot set sources [strlist]
+  mountpoints  - Snapshot set mount points [strlist]
+  devices      - Snapshot set devices [strlist]
+  status       - Snapshot set status [str]
+  autoactivate - Autoactivation status [str]
+  bootable     - Configured for snapshot boot [str]
+  bootentry    - Snapshot set boot entry [sha]
+  revertentry  - Snapshot set revert boot entry [sha]
+
+```
+
+To specify custom fields pass a comma separated list to `-o`:
+
+```bash
+snapm snapset list -oname,time
+SnapsetName  Time
+backup       2024-12-05 19:14:03
+upgrade      2024-12-05 19:14:09
+
+```
+
+To add fields to the default field set prefix the list of fields with the `+` character:
+
+```bash
+snapm snapset list -o+bootentry,revertentry
+SnapsetName  Time                 NrSnapshots Status  Sources        SnapshotEntry RevertEntry
+backup       2024-12-05 19:14:03            3 Active  /, /home, /var 41573a414f9d5 1cc5bc59c9b90
+upgrade      2024-12-05 19:14:09            2 Active  /, /var        a60dab4d3fb36 4ce6b27f16f30
+
+```
+
+The report can also be produced in JSON notation, suitable for parsing by other tools using the `--json` argument: 
+
+```bash
+snapm snapset list --json
+{
+    "Snapsets": [
+        {
+            "snapset_name": "backup",
+            "snapset_time": "2024-12-05 19:14:03",
+            "snapset_nr_snapshots": 3,
+            "snapset_status": "Active",
+            "snapset_sources": [
+                "/",
+                "/home",
+                "/var"
+            ]
+        },
+        {
+            "snapset_name": "upgrade",
+            "snapset_time": "2024-12-05 19:14:09",
+            "snapset_nr_snapshots": 2,
+            "snapset_status": "Active",
+            "snapset_sources": [
+                "/",
+                "/var"
+            ]
+        }
+    ]
+}
+
+```
+
+JSON reports use the full report field name (including the `snapset_`, `snapshot_`, `schedule_`, or `plugin_` prefix). Fields and sort order are specified with `--options` and `--sort` as usual. For further report formatting options refer to the `snapm(8)` manual page. 
+
+snapset show 
+
+Display available snapsets matching selection criteria. 
+
+```bash
+snapm snapset show [<name|uuid>]
+
+```
+
+By default the output is formatted in the same way as the output of the `snapm snapset create` command:
+
+```bash
+snapm snapset show upgrade
+SnapsetName:      upgrade
+Sources:          /, /var
+NrSnapshots:      2
+Time:             2024-12-05 19:14:09
+UUID:             87c6df8f-bd8c-5c9d-b081-4f6d6068cc07
+Status:           Active
+Autoactivate:     yes
+Bootable:         yes
+BootEntries:
+  SnapshotEntry:  a60dab4
+  RevertEntry:    4ce6b27
+
+```
+
+The individual snapshots making up each set are also displayed if `--members` is used:
+
+```bash
+snapm snapset show --members
+SnapsetName:      upgrade
+Sources:          /, /var
+NrSnapshots:      2
+Time:             2024-12-05 19:19:30
+UUID:             f0a46cde-9eed-5335-b239-66ed53e5b503
+Status:           Active
+Autoactivate:     yes
+Bootable:         yes
+BootEntries:
+  SnapshotEntry:  dfce8d8
+  RevertEntry:    fc414b0
+Snapshots:
+    Name:         fedora/root-snapset_upgrade_1733426370_-
+    SnapsetName:  upgrade
+    Origin:       /dev/fedora/root
+    Time:         2024-12-05 19:19:30
+    Source:       /
+    MountPoint:   /
+    Provider:     lvm2-cow
+    UUID:         7566dde3-96f4-5288-8b15-18be7c520327
+    Status:       Active
+    Size:         8.8GiB
+    Free:         8.8GiB
+    Autoactivate: yes
+    DevicePath:   /dev/fedora/root-snapset_upgrade_1733426370_-
+    VolumeGroup:  fedora
+    LogicalVolume: root-snapset_upgrade_1733426370_-
+
+    Name:         fedora/var-snapset_upgrade_1733426370_-var
+    SnapsetName:  upgrade
+    Origin:       /dev/fedora/var
+    Time:         2024-12-05 19:19:30
+    Source:       /var
+    MountPoint:   /var
+    Provider:     lvm2-cow
+    UUID:         22674f3e-f5c4-5632-9add-2df51985679e
+    Status:       Active
+    Size:         6.4GiB
+    Free:         6.4GiB
+    Autoactivate: yes
+    DevicePath:   /dev/fedora/var-snapset_upgrade_1733426370_-var
+    VolumeGroup:  fedora
+    LogicalVolume: var-snapset_upgrade_1733426370_-var
+
+```
+
+The output is also available in JSON notation using the `--json` argument:
+
+```bash
+snapm snapset show --json before-upgrade
+[
+    {
+        "SnapsetName": "before-upgrade",
+        "Sources": [
+            "/",
+            "/var"
+        ],
+        "MountPoints": [
+            "/",
+            "/var"
+        ],
+        "Devices": [],
+        "NrSnapshots": 2,
+        "Timestamp": 1756555124,
+        "Time": "2025-08-30 12:58:44",
+        "UUID": "87e31113-75a5-5eb6-b016-762639a2c7ed",
+        "Status": "Active",
+        "Autoactivate": true,
+        "Bootable": true,
+        "BootEntries": {
+            "SnapshotEntry": "7c56dc0",
+            "RevertEntry": "457f733"
+        }
+    }
+]
+
+```
+
+The `show --json` command uses the normal `show` output property names as the JSON keys. A `BootEntries` object will be added if either boot or revert entries are configured for the snapshot set. 
+
+## Snapshot Commands
+
+The `snapshot` command is used to manipulate, list, and display snapshots. 
+
+snapshot activate 
+
+Activate individual snapshots matching selection criteria. 
+
+```bash
+snapm snapshot activate [-N name] [-U uuid] [<name|uuid>]
+
+```
+
+snapshot deactivate 
+
+Deactivate individual snapshots matching selection criteria. 
+
+```bash
+snapm snapshot deactivate [-N name] [-U uuid] [<name|uuid>]
+
+```
+
+snapshot autoactivate 
+
+Enable or disable autoactivation for individual snapshots matching selection criteria. 
+
+```bash
+snapm snapshot autoactivate [--yes|--no] [-N name] [-U uuid] [<name|uuid>]
+
+```
+
+snapshot list 
+
+List available snapshots matching selection criteria. 
+
+```bash
+snapm snapshot list [<name|uuid>]
+
+```
+
+By default the information is presented as a tabular report with column headings indicating the meaning of each value. The default column selection includes the SnapsetName, Name, Origin, Source, Status, Size, Free, Autoactivate, and Provider fields: 
+
+```bash
+snapm snapshot list
+SnapsetName  Name                                         Origin           Source  Status  Size   Free   Autoactivate Provider
+upgrade      fedora/root-snapset_upgrade_1733426499_-     /dev/fedora/root /       Active  8.8GiB 8.8GiB yes          lvm2-cow
+upgrade      fedora/var-snapset_upgrade_1733426499_-var   /dev/fedora/var  /var    Active  6.4GiB 6.4GiB yes          lvm2-cow
+upgrade      fedora/home-snapset_upgrade_1733426499_-home /dev/fedora/home /home   Active  1.0GiB 1.9GiB yes          lvm2-thin
+
+```
+
+> **Note:**
+> For thin‑provisioned snapshots (lvm2‑thin, Stratis), “Free” reflects thin‑pool free space and may exceed “Size”. 
+> 
+> 
+
+snapshot show 
+
+Display available snapshots matching selection criteria. 
+
+```bash
+snapm snapshot show [<name|uuid>]
+
+```
+
+## Plugin Commands
+
+The `plugin` command is used to display information on the available snapshot provider plugins. 
+
+plugin list 
+
+The `plugin list` command lists the available plugins:
+
+```bash
+snapm plugin list
+PluginName PluginVersion PluginType
+lvm2-cow   0.1.0         Lvm2CowSnapshot
+lvm2-thin  0.1.0         Lvm2ThinSnapshot
+stratis    0.1.0         StratisSnapshot
+
+```
+
+## Schedule Commands
+
+The `schedule` command is used to create, display and manage schedules for automatic snapshot set creation. 
+
+schedule create 
+
+Create a new schedule with the provided name and list of sources (mount point or block device paths):
+
+```bash
+snapm schedule create [-b|--bootable] [-r|--revert] [--size-policy policy] [-p|--policy-type policy_type] [--keep-count count] [--keep-years years] [--keep-months months] [--keep-weeks weeks] [--keep-days days] [--keep-yearly yearly] [--keep-quarterly quarterly] [--keep-monthly monthly] [--keep-weekly weekly] [--keep-daily daily] [--keep-hourly hourly] --calendarspec calendarspec <name> source...
+
+```
+
+```bash
+snapm schedule create --policy-type count --keep-count 2 --bootable --revert --size-policy 25%SIZE --calendarspec hourly hourly / /var
+Name: hourly
+SourceSpecs: /, /var
+DefaultSizePolicy: 25%SIZE
+Calendarspec: hourly
+Boot: yes
+Revert: yes
+GcPolicy:
+    Name: hourly
+    Type: Count
+    Params: keep_count=2
+Enabled: yes
+Running: yes
+
+```
+
+### schedule delete
+
+Delete an existing schedule by name:
+
+```bash
+snapm schedule delete <name>
+
+```
+
+### schedule edit
+
+Modify an existing schedule by name:
+
+```bash
+snapm schedule edit [-b|--bootable] [-r|--revert] [--size-policy policy] [-p|--policy-type policy_type] [--keep-count count] [--keep-years years] [--keep-months months] [--keep-weeks weeks] [--keep-days days] [--keep-yearly yearly] [--keep-quarterly quarterly] [--keep-monthly monthly] [--keep-weekly weekly] [--keep-daily daily] [--keep-hourly hourly] --calendarspec calendarspec <name> [source...]
+
+```
+
+schedule enable 
+
+Enable an existing schedule by name: 
+
+```bash
+snapm schedule enable <name>
+
+```
+
+### schedule disable
+
+Disable an existing schedule by name:
+
+```bash
+snapm schedule disable <name>
+
+```
+
+### schedule list
+
+List configured schedules:
+
+```bash
+snapm schedule list [--nameprefixes] [--noheadings] [--options fields] [--sort fields] [--rows|--json] [--separator separator]
+
+```
+
+```bash
+snapm schedule list
+ScheduleName ScheduleSources         SizePolicy OnCalendar     Enabled
+custom       /, /home:100%SIZE, /var 50%SIZE    *-*-1 01:00:00 yes
+monthly      /:25%SIZE, /var:25%SIZE monthly    no
+hourly       /, /var                 25%SIZE    hourly         yes
+
+```
+
+### schedule show
+
+Display configured schedule:
+
+```bash
+snapm schedule show <name>
+
+```
+
+### schedule gc
+
+Run configured garbage collection policy for schedule:
+
+```bash
+snapm schedule gc <name>
+
+```
+
+## Reporting Commands
+
+The `snapm snapset list`, `snapm snapshot list`, `snapm plugin list`, and `snapm schedule list` commands generate a tabular report as output.  To control the list of displayed fields use the `-o`/`--options FIELDS` argument:
+
+```bash
+snapm snapset list -oname,sources
+SnapsetName  Sources
+backup       /, /home, /var
+userdata     /data, /home
+
+```
+
+To add extra fields to the default selection, prefix the field list with the `+` character:
+
+```bash
+snapm snapset list -o+uuid
+SnapsetName  Time                 NrSnapshots Status   Sources          UUID
+backup       2024-12-05 19:26:28            3 Active   /, /home, /var   53514020-e88d-5f53-bf09-42c6ab6e325d
+userdata     2024-12-05 19:26:45            2 Inactive /data, /home     e8d58051-7a94-5802-8328-54661ab1a70f
+
+```
+
+To display the available fields for either report use the field name `help`:
+
+```bash
+snapm snapset list -ohelp
+Snapshot set Fields
+-------------------
+  name         - Snapshot set name [str]
+  uuid         - Snapshot set UUID [uuid]
+  basename     - Snapshot set basename [str]
+  index        - Snapshot set index [idx]
+  timestamp    - Snapshot set creation time as a UNIX epoch value [num]
+  time         - Snapshot set creation time [time]
+  nr_snapshots - Number of snapshots [num]
+  sources      - Snapshot set sources [strlist]
+  mountpoints  - Snapshot set mount points [strlist]
+  devices      - Snapshot set devices [strlist]
+  status       - Snapshot set status [str]
+  autoactivate - Autoactivation status [str]
+  bootable     - Configured for snapshot boot [str]
+  bootentry    - Snapshot set boot entry [sha]
+  revertentry  - Snapshot set revert boot entry [sha]
+
+```
+
+### JSON Output
+
+All reports can optionally be formatted as JSON for parsing by other tools using the `--json` argument: 
+
+```bash
+snapm snapset list --json
+{
+    "Snapsets": [
+        {
+            "snapset_name": "backup",
+            "snapset_time": "2025-09-09 17:12:21",
+            "snapset_nr_snapshots": 3,
+            "snapset_status": "Inactive",
+            "snapset_sources": [
+                "/",
+                "/home",
+                "/var"
+            ]
+        },
+        {
+            "snapset_name": "before-upgrade",
+            "snapset_time": "2025-09-08 18:43:57",
+            "snapset_nr_snapshots": 2,
+            "snapset_status": "Active",
+            "snapset_sources": [
+                "/",
+                "/var"
+            ]
+        }
+    ]
+}
+
+```
+
+The `create` and `show` commands also support optional JSON output using the `--json` argument.  In this case the JSON schema maps the normal `show` output property names to JSON keys:
+
+```bash
+snapm snapset show --json before-upgrade
+[
+    {
+        "SnapsetName": "before-upgrade",
+        "Sources": [
+            "/",
+            "/var"
+        ],
+        "MountPoints": [
+            "/",
+            "/var"
+        ],
+        "Devices": [],
+        "NrSnapshots": 2,
+        "Timestamp": 1757353437,
+        "Time": "2025-09-08 18:43:57",
+        "UUID": "6330328b-a9d0-5b41-ac96-53b371449965",
+        "Status": "Active",
+        "Autoactivate": true,
+        "Bootable": true,
+        "BootEntries": {
+            "SnapshotEntry": "66dc7ad",
+            "RevertEntry": "6832c11"
+        }
+    }
+]
+
+```
+
+## Common Use Cases
+
+### System Updates and Rollback
+
+Before performing system updates, create a bootable snapshot:
+
+Create snapshot set before update:
+
+```bash
+snapm snapset create --bootable --revert pre-update / /var
+
+```
+
+Perform system update:
+
+```bash
+dnf update
+
+```
+
+If update causes issues, revert:
+
+```bash
+snapm snapset revert pre-update
+
+```
+
+Or boot into snapshot from boot menu (select: "Snapshot pre-update YYYY-MM-DD HH:MM:SS (version)"): 
+
+```bash
+reboot
+
+```
+
+Clean up when satisfied with update:
+
+```bash
+snapm snapset delete pre-update
+
+```
+
+### Development and Testing
+
+Create development checkpoints for experimental work:
+
+* Create checkpoint before major changes:
+
+```bash
+snapm snapset create dev-checkpoint /home /var/lib/myapp
+
+```
+
+* Make experimental changes
+* If changes don't work out, revert:
+
+```bash
+snapm snapset revert dev-checkpoint
+
+```
+
+### Data Protection
+
+Regular data snapshots for important directories allow backups to be captured from snapshots, lowering production impact by reducing backup downtime. 
+
+Daily backup of user data: 
+
+```bash
+snapm snapset create daily-backup /home /var/lib/database
+
+```
+
+Weekly system snapshots:
+
+```bash
+snapm snapset create weekly-system / /var --size-policy 50%SIZE
+
+```
+
+### Automated Scheduling
+
+Set up automated snapshot schedules:
+
+Hourly snapshots, keep 24:
+
+```bash
+snapm schedule create --autoindex \
+    --policy-type count \
+    --keep-count 24 \
+    --calendarspec hourly \
+    hourly / /home
+
+```
+
+Daily snapshots, keep 7 days:
+
+```bash
+snapm schedule create --autoindex \
+    --policy-type age \
+    --keep-days 7 \
+    --calendarspec daily \
+    daily / /home /var
+
+```
+
+Monthly bootable snapshots, keep 12:
+
+```bash
+snapm schedule create --autoindex \
+    --bootable --revert \
+    --policy-type timeline \
+    --keep-monthly 12 \
+    --calendarspec monthly \
+    monthly / /var
+
+```
+
+### Configuration Management
+
+Snapshot configuration changes:
+
+Before modifying system configuration: 
+
+```bash
+snapm snapset create config-backup /etc /var/lib/config
+
+```
+
+Make configuration changes:
+
+```bash
+vim /etc/myapp/config.conf
+
+```
+
+Test changes...
+
+If configuration breaks system, revert:
+
+```bash
+snapm snapset revert config-backup
+
+```
+
+## Best Practices
+
+### Naming Conventions
+
+Use consistent, descriptive naming:
+
+Good examples:
+
+* pre-kernel-update-6.5.0-snap
+* before-database-migration
+* dev-checkpoint-feature-x
+
+Avoid generic names:
+
+* backup
+* test
+* snapshot1
+
+### Size Policy Guidelines
+
+* For system volumes (`/`, `/var`): Use `100%SIZE` for critical systems, `200%USED` for normal use
+* For data volumes (`/home`): Use `100%USED` or `50%SIZE` depending on change frequency
+* For database volumes: Use `300%USED` or `100%SIZE` for heavy write workloads
+
+### Retention Policies
+
+Plan retention based on your needs:
+
+* **Hourly**: Keep 6-12 snapshots for short-term recovery
+* 
+**Daily**: Keep 3-7 snapshots for medium-term recovery 
+
+
+* **Weekly**: Keep 2-4 snapshots for long-term recovery
+* **Monthly**: Keep 3-6 snapshots for archival purposes
+
+### Monitoring and Maintenance
+
+Regular maintenance tasks:
+
+Check snapshot space usage:
+
+```bash
+snapm snapshot list -o name,size,free
+
+```
+
+Clean up old snapshots:
+
+```bash
+snapm snapset delete old-snapshot-name
+
+```
+
+Review scheduled snapshots:
+
+```bash
+snapm schedule list
+
+```
+
+### Access Control
+
+Snapm requires root privileges for most operations. Consider: 
+
+* Using sudo with specific command restrictions
+* Creating wrapper scripts for common operations
+* Implementing audit logging for snapshot operations
+
+### Data Sensitivity
+
+Remember that snapshots contain complete copies of data:
+
+* Consider encryption for sensitive data
+* Implement proper cleanup procedures for temporary snapshots
+
+### Boot Security
+
+Bootable snapshots can bypass some security measures:
+
+* Bootable snapshot sets use the kernel present at the time of snapshot creation: older kernels may contain security vulnerabilities patched in newer builds. 
+
+
+* Consider password protecting GRUB and enforcing physical access controls. 
+
+
+
+Integration Examples 
+
+### With Systemd Services
+
+Create consistent snapshots by ensuring services are in a stable state:
+
+Stop service before snapshot:
+
+```bash
+systemctl stop myapp
+snapm snapset create myapp-maintenance /var/lib/myapp
+systemctl start myapp
+
+```
+
+Alternatively isolate to rescue mode for system-wide consistency:
+
+```bash
+systemctl isolate rescue.target
+snapm snapset create system-maintenance / /var
+systemctl isolate multi-user.target
+
+```
+
+### With Backup Systems
+
+Integrate with existing backup workflows:
+
+Create consistent snapshot for backup:
+
+```bash
+snapm snapset create backup /home /var/lib/data
+
+```
+
+Mount individual snapshots for backup tools:
+
+```bash
+mkdir -p /mnt/snapshot-backup/home
+mount /dev/fedora/home-snapset_backup_1757533502_-home /mnt/snapshot-backup/home
+...
+
+```
+
+Run backup tools against mounted snapshot: 
+
+```bash
+rsync -av /mnt/snapshot-backup/home backup-server:/backups/
+...
+
+```
+
+Clean up:
+
+```bash
+umount /mnt/snapshot-backup/home
+snapm snapset delete backup
+
+```
+
+### With Configuration Management
+
+Use with Ansible, Puppet, etc.:
+
+Pre-deployment snapshot:
+
+```bash
+snapm snapset create pre-deploy-$(date +%Y%m%d) /etc /var/www
+
+```
+
+Run deployment:
+
+```bash
+ansible-playbook deploy.yml
+
+```
+
+Verify deployment:
+
+```bash
+curl -f http://localhost/health ||
+{
+    echo "Deployment failed, reverting..."
+    snapm snapset revert pre-deploy-$(date +%Y%m%d)
+}
+
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Snapshot creation fails with "No space left"**
+
+Check available space and adjust size policies:
+
+Check current usage:
+
+```bash
+vgs
+stratis pool list
+
+```
+
+Use smaller size policy:
+
+```bash
+snapm snapset create backup --size-policy 50%USED /
+
+```
+
+**Boot entries not appearing**
+
+Ensure boom is properly installed and configured:
+
+Check boom installation:
+
+```bash
+rpm -q boom-boot
+boom list
+
+```
+
+Verify boom configuration:
+
+```bash
+boom profile list
+
+```
+
+**Snapshot activation fails**
+
+Check snapshot status and storage health: 
+
+Check snapshot status:
+
+```bash
+snapm snapshot list
+
+```
+
+Check LVM and Stratis status:
+
+```bash
+lvs
+vgs
+stratis pool list
+
+```
+
+Check for storage errors:
+
+```bash
+journalctl --priority err
+dmesg | grep -i err
+
+```
+
+**Snapshot space exhaustion**
+
+When snapshots are close to running out of space:
+
+Check snapshot usage:
+
+```bash
+snapm snapshot list -o name,size,free
+
+```
+
+Resize snapshot if possible:
+
+```bash
+snapm snapset resize my-snapset /var:500%USED
+
+```
+
+If necessary resize the LVM2 volume group, thin pool, or Stratis pool to create more space for snapshot storage. 
+
+**Permission denied errors**
+
+Ensure snapm is run as the root user: 
+
+```bash
+snapm snapset create before-upgrade / /var
+$ sudo snapm snapset create before-upgrade / /var
+
+```
+
+**LVM thin pool issues**
+
+For thin provisioning problems:
+
+Check thin pool status:
+
+```bash
+sudo lvs -a -o +data_percent,metadata_percent
+
+```
+
+Extend thin pool if needed:
+
+```bash
+sudo lvextend -L+1G /dev/vg/thin_pool
+
+```
+
+Check thin pool metadata:
+
+```bash
+sudo thin_check /dev/vg/thin_pool_tmeta
+
+```
+
+**Stratis backend issues**
+
+For Stratis-related problems:
+
+Check Stratis daemon status:
+
+```bash
+systemctl status stratisd
+
+```
+
+List Stratis pools and filesystems:
+
+```bash
+stratis pool list
+stratis filesystem list
+
+```
+
+Check Stratis logs: 
+
+```bash
+journalctl -u stratisd
+
+```
+
+### Performance Considerations
+
+**Snapshot Size Planning**
+
+* Use `100%SIZE` for complete protection but higher space usage
+* Use `200%USED` for balance between protection and space efficiency
+* Use `50%USED` or `25%SIZE` for space-constrained environments
+
+**Storage Performance**
+
+* LVM2 thin provisioning generally offers better performance than copy-on-write
+* Consider separate storage for snapshot backstores in high-I/O environments
+* Monitor snapshot space usage to prevent exhaustion
+
+## Debugging
+
+### Debug Mode
+
+Enable debug mode with very verbose output:
+
+```bash
+snapm -d all -vv snapset create debug-test /home
+
+```
+
+Enable specific debug categories with very verbose output:
+
+```bash
+snapm -vv -d command,plugin snapset list
+
+```
+
+Basic verbose output: 
+
+```bash
+snapm -v snapset show my-snapset
+
+```
+
+### Log Analysis
+
+Check system logs for snapm timer unit activity:
+
+Check snapm logs:
+
+```bash
+journalctl --boot 0 | grep -- snapm-
+
+```
+
+Check for storage-related messages: 
+
+```bash
+journalctl --boot 0 | grep -i lvm
+dmesg | grep 'Buffer I\/O error'
+
+```
+
+Check for filesystem errors: 
+
+```bash
+journalctl --boot 0 | grep -i ext4
+journalctl --boot 0 | grep -i xfs
+
+```
+
+### Storage Backend Debugging
+
+**Debugging Provider/Plugin Problems**
+
+When snapshot operations fail, check provider-specific status:
+
+Check available plugins:
+
+```bash
+snapm plugin list
+
+```
+
+For LVM2 issues, check LVM status:
+
+```bash
+lvs -a
+vgs
+pvs
+
+```
+
+For Stratis issues, check daemon and pools:
+
+```bash
+systemctl status stratisd
+stratis pool list
+stratis filesystem list
+
+```
+
+### Configuration Validation
+
+Verify snapm configuration:
+
+```bash
+snapm -vv --debug=all plugin list
+
+```
+
+Validate boom integration:
+
+```bash
+boom list
+boom profile list
+
+```
+
+## Getting Help
+
+### Command Line Help
+
+Help is available for the `snapm` command and each subcommand: 
+
+General help:
+
+```bash
+snapm --help
+
+```
+
+Command type help:
+
+```bash
+snapm snapset --help
+snapm snapshot --help
+snapm schedule --help
+snapm plugin --help
+
+```
+
+Specific command help:
+
+```bash
+snapm snapset create --help
+snapm snapset list --help
+
+```
+
+### Manual Pages
+
+Full command, option, argument, and configuration documentation is available in the manual pages:
+
+```bash
+man 8 snapm
+man 5 snapm.conf
+man 5 snapm-plugins.d
+man 5 snapm-schedule.d
+
+```
+
+### Field Reference
+
+Get available fields for reports:
+
+Snapset fields:
+
+```bash
+snapm snapset list -ohelp
+
+```
+
+Snapshot fields:
+
+```bash
+snapm snapshot list -ohelp
+
+```
+
+Schedule fields:
+
+```bash
+snapm schedule list -ohelp
+
+```
+
+Plugin fields:
+
+```bash
+snapm plugin list -ohelp
+
+```
+
+### Version Information
+
+Check snapm version and component information:
+
+Show version:
+
+```bash
+snapm --version
+
+```
+
+Show plugin versions:
+
+```bash
+snapm plugin list
+
+```
+
+### Online Resources
+
+Additional help and documentation:
+
+* **Project Homepage**: [https://github.com/snapshotmanager/snapm](https://github.com/snapshotmanager/snapm)
+* **Documentation**: [https://snapm.readthedocs.io/](https://snapm.readthedocs.io/)
+* **Issue Tracker**: [https://github.com/snapshotmanager/snapm/issues](https://github.com/snapshotmanager/snapm/issues)
+* **Wiki**: [https://github.com/snapshotmanager/snapm/wiki](https://github.com/snapshotmanager/snapm/wiki)
+* **Mailing List**: snapm-users@lists.fedoraproject.org
+
+### Community Support
+
+Get help from the community:
+
+* **GitHub Issues**: [https://github.com/snapshotmanager/snapm/issues](https://github.com/snapshotmanager/snapm/issues)
+
+**Filing Bug Reports**
+
+When reporting issues, include:
+
+* Snapm version (`snapm --version`)
+* Operating system and version
+* Storage backend information
+* Complete error messages
+* Debug output (`snapm -vv --debug=all <command>`) 
+
+
+* Steps to reproduce the issue
+
+**Example bug report template**:
+
+```text
+**Snapm Version**: 0.4.3
+**OS**: Fedora 42 x86_64
+**Storage**: LVM2 with thin provisioning
+**Error**: Snapshot creation fails with permission denied
+
+**Steps to reproduce**:
+1. sudo snapm snapset create test /home
+2. Error appears immediately
+
+**Debug output**:
+snapm -vv -d all snapset create test /home
+[debug output here]
+
+**Additional context**:
+- Works with root user
+- Sudo configuration appears correct
+
+```
+
+## Appendix
+
+### Storage Backend Details
+
+**LVM2 Copy-on-Write**
+
+* Requires fixed size allocation 
+
+
+* Good for infrequent snapshots
+* Lower performance impact during normal operation
+* Higher space requirements
+
+**LVM2 Thin Provisioning**
+
+* Dynamic space allocation
+* Better space efficiency
+* Good performance characteristics
+* Requires thin pool configuration
+
+**Stratis**
+
+* Modern storage management
+* Automatic thin provisioning
+* Integrated with systemd
+* Requires Stratis daemon
+
+### Exit Codes
+
+Snapm commands return standard exit codes:
+
+* **0**: Success
+* **1**: Runtime error
+* **2**: Invalid arguments / parse error

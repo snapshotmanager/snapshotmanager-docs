@@ -1,0 +1,48 @@
+{% import "macros/extra_icon.svg.html" as macro_extra_icon -%}
+{% import "macros/social_icon.svg.html" as macro_social_icon -%}
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ config.extra.cela.global.i18n_dir }}">
+
+<head>
+  {% block head -%}
+    {% include "partials/head.html" -%}
+  {% endblock -%}
+</head>
+
+{% set body_classes = "" -%}
+{% if section or term or taxonomy -%}
+  {% set body_classes = body_classes ~ "list " -%}
+{% endif -%}
+
+<body
+class="{{ body_classes | trim }}" id="top">
+  {% block header -%}
+    {% include "partials/home/home_header.html" -%}
+  {% endblock %}
+<main class="main">
+  {% block main %}
+  {% include "partials/home/home_main.html" %}
+  {% endblock %}
+</main>
+{% block footer %}
+{% include "partials/home/home_footer.html" %}
+{% endblock %}
+
+{% block search_panel %}
+<div id="search-toggle-box" class="hidden">
+  <div class="search-toggle-modal">
+    <input type="text" id="search-toggle-input" placeholder="Type to search..." />
+    <button id="search-toggle-button">Search</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ get_url(path='js/toggle-sections.js') | safe }}"></script>
+{% if config.extra.debug %}
+{% include "macros/debug_console.html" %}
+{% endif %}
+{% endblock %}
+</body>
+
+</html>

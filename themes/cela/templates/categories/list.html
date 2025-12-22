@@ -1,0 +1,17 @@
+{% extends "index.html" %}
+{% block main %}
+{% if not title %}
+  {% set title = taxonomy.name | replace(from="_",to=" ") | title %}
+	{% set css_class = "terms-" ~ taxonomy.name %}
+{% endif %}
+
+{% include "partials/taxonomy/list_header.html" %}
+
+<ul class="terms-tags {{ css_class }}">
+    {% for term in terms %}
+    <li>
+        <a href="{{ term.permalink }}">{{ term.name }} <sup><strong><sup>{{ term.page_count }}</sup></strong></sup> </a>
+    </li>
+    {% endfor %}
+</ul>
+{% endblock %}

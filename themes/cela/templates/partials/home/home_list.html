@@ -1,0 +1,8 @@
+{% set home_list_style = config.extra.cela.home_list_style | default(value="default") %}
+{% if home_list_style == "bare" %}
+  {% include "partials/home/home_posts_bare.html" %}
+{% elif home_list_style == "mix" %}
+  {% include "partials/home/home_posts_mix.html" %}
+{% else %}
+  {% include "partials/home/home_list_default.html" %}
+{% endif %}

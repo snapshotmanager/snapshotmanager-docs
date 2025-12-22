@@ -1,0 +1,13 @@
+<article class="first-entry home-info">
+    <header class="entry-header">
+        <h1>{{ config.extra.cela.home_title }}</h1>
+    </header>
+    <div class="entry-content">
+        {{ config.extra.cela.home_content | markdown(inline=true) | safe }}
+    </div>
+    <footer class="entry-footer">
+        {% if config.extra.cela.show_home_social_icons | default(value=true) %}
+            {% include "partials/home/home_social_icons.html" %}
+        {% endif %}
+    </footer>
+</article>
