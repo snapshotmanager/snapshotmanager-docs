@@ -107,8 +107,8 @@ favicon = "snapm-favicon.ico"
 favicon16x16 = "snapm-favicon-16x16.png"
 favicon32x32 = "snapm-favicon-32x32.png"
 header_title = "Snapshot Manager"
-icon = "svg/cela_new_small_rec.svg"
-icon_dark = "svg/cela_new_small_rec.svg"
+icon = "svg/snapm-logo-vector.svg"
+icon_dark = "svg/snapm-logo-vector.svg"
 
 date_format = "%Y-%m-%d"
 show_home_title = true
@@ -117,13 +117,12 @@ navigation = [
   {path = "/", title = "Archive"},
   {path = "/tags", title = "Tags"},
   {path = "/categories", title = "Categories"},
-#  {path = "#", title = "Search", is_search = true},
-#  {path = "/robot", title = "Robot", is_robot = true},
+  {path = "#", title = "Search", is_search = true},
   {path = "https://getzola.org/", title = "Zola", is_external = true},
 ]
 
 show_home_content = true
-home_content = "Welcome to the Snapshot Manager docs site!"
+home_content = "<img src='png/logo-large-1024x1024.png' width=512 height=512 alt='SnapshotManager logo'/><br>Welcome to the Snapshot Manager docs site! We'll be sharing news, blog posts, release announcements, future plans and updates, technical tips and more."
 # The default home directory you will write your blog post content
 # This will be used to generate the home page (with subsections) posts list
 # If you set this to "", the all the content under "content" will be shown (not recommand)
@@ -154,7 +153,7 @@ taxonomies_tail = [
 # if your blog source is public, cela will try to find the orinal page with its relative path
 #edit_post_url = "mailto:your-username@gmail.com"
 edit_post_url = "https://github.com/snapshotmanager/snapshotmanager-docs/tree/main"
-show_cela_logo = true
+show_cela_logo = false
 show_code_copy_buttons = true
 show_header_title = false
 show_post_edit_button = true
