@@ -61,7 +61,7 @@ taxonomies = [
 ]
 
 # Whether to build a search index to be used later on by a JavaScript library
-build_search_index = false
+build_search_index = true
 
 [markdown]
 # Whether to do syntax highlighting
@@ -169,9 +169,9 @@ unfold_toc = false
 show_word_count = true
 
 # [Cela hint] Cela will use this for search page title (default is "Search" if not set)
-search_title = "From Config: Search"
+search_title = "Search"
 # [Cela hint] Cela will use this for search page description (default is "Find posts by title or body content" if not set)
-search_description = "From Config: Find posts by title or body content"
+search_description = "Find posts by title or body content"
 
 [extra.cela.color]
 
