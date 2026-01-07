@@ -1,7 +1,7 @@
 +++
 title = "snapm 0.5.3 Release Notes"
 date = 2026-01-05
-weight = 42
+weight = 41
 template = "page.html"
 render = true
 [taxonomies]
