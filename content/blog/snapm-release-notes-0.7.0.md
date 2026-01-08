@@ -37,7 +37,7 @@ Users should upgrade to [v0.7.0](https://github.com/snapshotmanager/snapm/releas
 * fsdiff: implement cheap sibbling proximity heuristic for moves by [@bmr-cymru](https://github.com/bmr-cymru/) in [#874](https://github.com/snapshotmanager/snapm/pull/874)
 * fsdiff: support `DiffOptions.from_path` as list by [@bmr-cymru](https://github.com/bmr-cymru/) in [#875](https://github.com/snapshotmanager/snapm/pull/875))
 * plugins: bump plugin versions for prio support by [@bmr-cymru](https://github.com/bmr-cymru/) in [#876](https://github.com/snapshotmanager/snapm/pull/876)
-* tests: improve `snapm.fsdiff` coverage by [@bmr-cymru](https://github.com/bmr-cymru/) in [#991](https://github.com/snapshotmanager/snapm/pull/881
+* tests: improve `snapm.fsdiff` coverage by [@bmr-cymru](https://github.com/bmr-cymru/) in [#991](https://github.com/snapshotmanager/snapm/pull/881)
 * snapm: lift timeline classification logic up to `SnapshotSet` by [@bmr-cymru](https://github.com/bmr-cymru/) in [#885](https://github.com/snapshotmanager/snapm/pull/885)
 * snapm: don't alpha sort categories in reports by [@bmr-cymru](https://github.com/bmr-cymru/) in [#892](https://github.com/snapshotmanager/snapm/pull/892)
 * mounts: container mount workarounds by [@bmr-cymru](https://github.com/bmr-cymru/) in [#900](https://github.com/snapshotmanager/snapm/pull/900)
