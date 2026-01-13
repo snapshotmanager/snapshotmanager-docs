@@ -4,9 +4,9 @@ date = 2026-01-13
 weight = 45
 template = "page.html"
 render = true
-[taxonomis]
-tags = ["blog","getting started"]
-categories = ["tech tips"]
+[taxonomies]
+tags = ["tips","getting started"]
+categories = ["blog posts", "tech tips"]
 +++
 
 # Getting `snapm`
