@@ -195,13 +195,13 @@ Depending on how `snapm` was installed the package will include some or all of t
 
 ### 5.1 Source Distribution
 
-The source distribution (a git checkout or a tarball) includes all the source and in tree documentation for Snapshot Manager but you are responsible for installing it and making it usable on your system. Refer to the [3.](#3-installing-from-pypi-bleeding-edge-releases-some-assembly-required) for instructions.
+The source distribution (a git checkout or a tarball) includes all the source and in tree documentation for Snapshot Manager but you are responsible for installing it and making it usable on your system. Refer to [3.](#3-installing-from-pypi-bleeding-edge-releases-some-assembly-required) for instructions.
 
 ### 5.2 RPM Packages
 
 The `snapm` project is packaged for RPM based distributions as three subpackages that all build from the same source RPM:
 
-* `snapm` — The `snapm(8)` program, its manual pages, configuration files, systemd units, tmpfiles.d configuration, and [`README.md`](https://github.com/snapshotmanager/snapm/blob/main/README.md).
+* `snapm` — The `snapm(8)` program, its manual pages, configuration files, systemd units, `tmpfiles.d` configuration, and [`README.md`](https://github.com/snapshotmanager/snapm/blob/main/README.md).
 
 * `python3-snapm` — The Python API comprising the `snapm` Python package.
 
