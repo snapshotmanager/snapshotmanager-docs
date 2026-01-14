@@ -113,6 +113,8 @@ Is this ok [y/N]: y
 
 Enter ‘y’ when prompted to confirm enabling the repository then follow the instructions from [1.](#1-installing-distribution-packages-with-dnf-recommended-for-most-users) to install the packages. When first installing packages from a new copr repository, you will be prompted to accept the Open PGP key used for signing packages in that repository: decide whether you trust the publisher of the builds, and enter ‘y’ to accept if so.
 
+Note that the `copr` builds produced by the Packit build system are transient: they are retained for 60 days, after which the package repositories are permanently deleted. This should not be a problem in most cases as the builds are intended to be used for short term testing and feedback on active development.
+
 ## 3. Installing from PyPi (Bleeding Edge Releases: Some Assembly Required)
 
 * A Linux system installed with a recent edition of [Fedora](https://fedoraproject.org) (F42+), [CentOS Stream](https://www.centos.org/download/) (c9s+), or [Red Hat Enterprise Linux](https://developers.redhat.com/products/rhel/download) (RHEL9.6 onward).
