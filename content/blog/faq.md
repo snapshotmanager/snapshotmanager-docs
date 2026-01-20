@@ -31,13 +31,13 @@ Our users ask a lot of reasonable and insightful questions about `snapm` and its
 ## Using Snapshot Manager
 
 **Q:** What's the difference between a Snapshot and a Snapshot Set?  
-**A:** A Snapshot is an individual instance of a block device or file system snapshot (managed by `snapm` or not, as the case may be). A Snapshot Set is a named collection of snapshots taken at the same moment in time and managed by `snapm`.
+**A:** A Snapshot is an individual instance of a block device or file system snapshot (managed by `snapm` or not, as the case may be). A Snapshot Set is a named collection of snapshots taken at the same point in time and managed by `snapm`.
 
 **Q:** Can I use the difference engine if I haven't created any snapshot sets yet?  
 **A:** No: it is only possible to create difference reports when there is at least one snapshot set to make a comparison against.
 
 **Q:** Do I need to use `boom` in order to use `snapm`?  
-**A:** We require `boom` to create bootable snapshot sets but you don't need to interact with it directly (you don't even need to install the `boom-boot` CLI, but it can be useful for inspecting your boot entries). Unless you have specific requirements the `snapm` tool can take care of all the details for you when you use the `--boot` or `--revert` options.
+**A:** We require `boom` to create bootable snapshot sets but you don't need to interact with it directly (you don't even need to install the `boom-boot` CLI, but it can be useful for inspecting your boot entries). Unless you have unusual requirements the `snapm` tool can take care of all the details for you when you use the `--boot` or `--revert` options.
 
 ## Snapshot Set Creation and Management
 
