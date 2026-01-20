@@ -42,10 +42,10 @@ Our users ask a lot of reasonable and insightful questions about `snapm` and its
 ## Snapshot Set Creation and Management
 
 **Q:** How much space do I need for snapshots?  
-**A:** That is a bit of a ‘how long is a piece of string?’ question: the precise answer depends on the amount of change that occurs to the origin volume or the snapshot during its lifespan. Snapshot Manager defaults to allocating twice the space currently used on a mounted file system, or one quarter the size of block devices when creating snapshot sets, but if you have a better estimate then these values should be adjusted for your particular circumstances.
+**A:** That is a bit of a ‘how long is a piece of string?’ question: the precise answer depends on the amount of change that occurs to the origin volume or the snapshot during its lifespan. Snapshot Manager has built-in default size policies when creating snapshot sets, but if you have a better estimate then these values should be adjusted for your particular circumstances: the default size policy is different depending on whether you are creating a snapshot from a mount point source or a block device source. For mount points the default size policy specifies twice the space currently used on the mount point (‘200%USED’ in size policy notation). For block devices it is one quarter the physical size of the device (‘25%SIZE’)
 
 **Q:** What happens if a snapshot runs out of space?  
-**A:** This will produce errors and may invalidate the snapshot. This should be avoided at all costs if you value what the snapshot represents, as it will result in data loss.
+**A:** This will produce errors and may invalidate the snapshot. This should be avoided as the snapshot will be rendered unusable: this will result in data loss.
 
 **Q:** Can I create snapshots of individual files or directories?  
 **A:** No: none of the current snapshot providers support snapshots at this granularity. A similar result can be obtained on modern file systems via the *reflink* facility (see [`cp(1)`](https://man7.org/linux/man-pages/man1/cp.1.html)) but these snapshot-like file system objects are not managed by `snapm`.
@@ -115,7 +115,7 @@ Our users ask a lot of reasonable and insightful questions about `snapm` and its
 ## Troubleshooting
 
 **Q:** Why can't I mount my snapshot set?  
-**A:** First check the snapshot set is not Invalid. If this is the case then the volume will be inaccessible (and difficult to repair — recovery of an invalid CoW exception store is beyond the scope of this FAQ). If the snapshot is valid check the output of [`dmesg(1)`](https://man7.org/linux/man-pages/man1/dmesg.1.html) or [`journalctl(1)`](https://man7.org/linux/man-pages/man1/journalctl.1.html) and consider consulting the [`fsck(8)`](https://man7.org/linux/man-pages/man8/fsck.8.html) program for your file system (preferably, to start, in check/read only/dry run mode if supported).
+**A:** First check the snapshot set is not `Invalid` by examining the `Status` field in the output of `snapm snapset list`. If this is the case then the volume will be inaccessible (and difficult to repair — recovery of an invalid CoW exception store is beyond the scope of this FAQ). If the snapshot is valid check the output of [`dmesg(1)`](https://man7.org/linux/man-pages/man1/dmesg.1.html) or [`journalctl(1)`](https://man7.org/linux/man-pages/man1/journalctl.1.html) and consider consulting the [`fsck(8)`](https://man7.org/linux/man-pages/man8/fsck.8.html) program for your file system (preferably, to start, in check/read only/dry run mode if supported).
 
 Note that if you are trying to mount a snapshot of an [`xfs(5)`](https://man7.org/linux/man-pages/man5/xfs.5.html) file system while its origin volume is also mounted you will need to specify `-o nouuid` when running the [`mount(8)`](https://man7.org/linux/man-pages/man8/mount.8.html) program to avoid a UUID collision.
 
