@@ -39,9 +39,9 @@ Some familiarity with your storage stack's management tools will help when it co
 
 You are free to name your snapshot set anything you like within the constraints enforced by `snapm` and its provider plugins:
 
-1. The ‘_’ (underscore) character is not permitted.
+1. The `_` (underscore) character is not permitted.
 
-2. The valid characters for snapshot set names are the ASCII lowercase and uppercase alphabetic characters, the digits, and the symbols ‘.’, ‘+’, and ‘-’.
+2. The valid characters for snapshot set names are the ASCII lowercase and uppercase alphabetic characters, the digits, and the symbols `.`, `+`, and `-`.
 
 3. Certain strings may be forbidden by particular provider plugins: for instance, LVM2 reserves the string `_mlog` (and others) for internal logical volume names (refer to [`lvm(8)`](https://man7.org/linux/man-pages/man8/lvm.8.html), [`lvmraid(7)`](https://man7.org/linux/man-pages/man7/lvmraid.7.html) and related manual pages for more information).
 
@@ -49,13 +49,13 @@ You are free to name your snapshot set anything you like within the constraints 
 
 5. Any provider that represents the snapshot name as an entry in the file system (which includes all current and planned snapshot providers) is naturally limited by the maximum allowed file name length on Linux (255 characters). Again, this absolute maximum is reduced somewhat by the need for `snapm` to encode various information into the names it generates.
 
-6. If you include a ‘.’ followed by a nonnegative number at the end of your snapshot set name `snapm` will consider it to be an index. This is useful when taking recurring snapshots sets of the same things with a common base name. You can also have `snapm` add one automatically using the `--autoindex` option (more on that in a later post).
+6. If you include a `.` followed by a nonnegative number at the end of your snapshot set name `snapm` will consider it to be an index. This is useful when taking recurring snapshots sets of the same things with a common base name. You can also have `snapm` add one automatically using the `--autoindex` option (more on that in a later post).
 
 7. it is generally best to not include a date or time reference in the name unless you really, really want to: `snapm` already stores the creation time of the snapshot set as a UNIX epoch timestamp value and renders it as human readable date and time strings in the local time zone.
 
-8. The name ‘.’ is reserved by snapm for referencing the live root file system.
+8. The name `.` is reserved by snapm for referencing the live root file system.
 
-Aim for memorable and meaningful names: ‘`quux-foo-backup`’ might seem like a good idea at the time, when you're typing in a hurry, but future you will thank present you for coming up with something more self-explanatory.
+Aim for memorable and meaningful names: `quux-foo-backup` might seem like a good idea at the time, when you're typing in a hurry, but future you will thank present you for coming up with something more self-explanatory.
 
 Good names might be:
 
@@ -87,13 +87,13 @@ Bad names would include:
 
 Snapshot Manager provides size policies that allow the user to request that a certain amount of space be available when creating snapshots. For some providers (LVM2 Thin, Stratis) this is simply a check that this space is available at the time the snapshot set is created. For LVM2 CoW it determines the actual size of the snapshot exception store that the tool will allocate.
 
-The default size policy is different depending on whether you are creating a snapshot from a mount point source or a block device source. For mount points the default size policy specifies twice the space currently used on the mount point (‘`200%USED`’ in size policy notation). For block devices it is one quarter the physical size of the device (‘`25%SIZE`’).
+The default size policy is different depending on whether you are creating a snapshot from a mount point source or a block device source. For mount points the default size policy specifies twice the space currently used on the mount point (`200%USED` in size policy notation). For block devices it is one quarter the physical size of the device (`25%SIZE`).
 
-To override these defaults, either append a colon and size policy to individual sources (‘`:POLICY`’) or use `--size-policy=POLICY` for all sources without explicit policies.
+To override these defaults, either append a colon and size policy to individual sources (`:POLICY`) or use `--size-policy=POLICY` for all sources without explicit policies.
 
 For example:
 
-* `/:2GiB` — specify a source of ‘/’ (the root file system) with a fixed 2GiB size policy
+* `/:2GiB` — specify a source of `/` (the root file system) with a fixed 2GiB size policy
 
 * `/:100%SIZE /home:50%SIZE` — specify sources for root and home with a policy requesting 100% and 50% of their respective device sizes
 
@@ -183,7 +183,7 @@ var                                       
 var-snapset_my-first-set_1768308252_-var     1.20g  0.19 
 ```
 
-Note the 0.19% value in the ‘`Data%`’ column: this is the percentage of the snapshot exception store that has been used so far. In this case it's a very healthy value. If the value begins to approach 100% you need to take action using lvresize or snapm snapset resize in order to avoid the snapshot being invalidated.
+Note the 0.19% value in the `Data%` column: this is the percentage of the snapshot exception store that has been used so far. In this case it's a very healthy value. If the value begins to approach 100% you need to take action using lvresize or snapm snapset resize in order to avoid the snapshot being invalidated.
 
 We will discuss more comprehensive monitoring and maintenance strategies in later chapters. For now, use your regular storage administration tools (whether that is [`lvs(8)`](https://man7.org/linux/man-pages/man8/lvs.8.html) for LVM2 volumes, or the [`stratis(8)`](https://www.mankier.com/8/stratis) command for Stratis storage) to keep an eye on the space available to your snapshots. You can resize individual snapshots using the corresponding tool (for example, [`lvresize(8)`](https://man7.org/linux/man-pages/man8/lvresize.8.html) for LVM2), or you can use the `snapm snapset resize` command to apply new size policies to an already created snapshot set.
 
