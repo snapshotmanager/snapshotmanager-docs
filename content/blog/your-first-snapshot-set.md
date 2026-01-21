@@ -11,7 +11,7 @@ categories = ["blog posts", "tech tips"]
 
 # Your First Snapshot Set
 
-A snapshot set is a collection of snapshots, bound together with a name, and created at a common moment in time[^1]. At a bare minimum, to create one, you just need a name and a list of sources (*mount points* or *block devices*) that you would like to include in the set. More advanced options exist to give additional control over the creation process and the resulting snapshot set: we will cover these in detail in future blog posts.
+A snapshot set is a collection of snapshots, bound together with a name, and created at a common point in time[^1]. At a bare minimum, to create one, you just need a name and a list of sources (*mount points* or *block devices*) that you would like to include in the set. More advanced options exist to give additional control over the creation process and the resulting snapshot set: we will cover these in detail in future blog posts.
 
 ## Choosing Sources: First Things to know
 
