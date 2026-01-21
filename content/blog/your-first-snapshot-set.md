@@ -99,7 +99,7 @@ For example:
 
 * `--size-policy=100%SIZE` — set the policy for all sources not otherwise specified on the command line to be 100% of the corresponding device size
 
-# `snapm snapset create`
+## The `snapm snapset create` command
 
 With the basics explained it's time to actually create a snapshot set with the `snapm snapset create` command. Take your chosen name and list of sources and append them to the command line, then hit Enter to run the program and create the snapshot set:
 
