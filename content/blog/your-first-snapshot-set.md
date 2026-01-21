@@ -143,13 +143,13 @@ That's all there is to it! Before we conclude let's take a brief look at the out
 
 * `Bootable` — whether this snapshot set has [`boom(8)`](https://www.mankier.com/8/boom) boot entries or not: `yes` or `no`
 
-We will get to all of these properties and their precise meaning in good time, but for now the Status field deserves a little more explanation: some snapshot providers (LVM2 Thin, Stratis) support optional activation for snapshot devices.
+We will get to all of these properties and their precise meaning in good time, but for now the `Status` field deserves a little more explanation: some snapshot providers (LVM2 Thin, Stratis) support optional activation for snapshot devices.
 
 This means that you don't have snapshot devices cluttering the system and using resources when they are not required and is therefore more efficient — especially when dealing with very large numbers of snapshots. For LVM2 CoW the snapshot volume must be active at all times that the origin is active.
 
 If your snapshot set includes thin snapshots (LVM2 Thin or Stratis) then it will begin its life in the `Inactive` state[^3]. If it only includes LVM2 CoW snapshots then it will begin in the `Active` state (and cannot, in fact, become `Inactive` unless the origin volume is also inactive).
 
-If you receive an error message instead of the expected output shown above study it carefully to try to understand what it is telling you. Most error conditions have a clear error message that explains exactly what is wrong. The most common error is ‘not enough space’: if you run into this you will see a message like this rather than the snapshot set summary:
+If you receive an error message instead of the expected output shown above study it carefully to try to understand what it is telling you. Most error conditions have a clear message that explains exactly what is wrong. The most common error is ‘not enough space’: if you run into this you will see a message like this rather than the snapshot set summary:
 
 ```
 # snapm snapset create my-first-set / /var
@@ -171,7 +171,7 @@ If you receive some other error refer to the `snapm(8)` manual page and the [FAQ
 
 Now that you have a snapshot set that captures the state of your system at some moment in time you need to know how to look after it. This is essentially the same task as you would need to carry out for any other volume managed with your tool of choice. The major point to bear in mind is that both thin and LVM2 CoW snapshots can run out of space. It is important to ensure that this does not happen for the reasons explained in the [Performance & Safety section of the Snapshot Manager FAQ](https://snapshotmanager.github.io/blog/faq/#performance-safety).
 
-As an example, using the snapshot set created in the previous step we see the following output when running the lvs(8) program[^5]:
+As an example, using the snapshot set created in the previous step we see the following output when running the [`lvs(8)`](https://man7.org/linux/man-pages/man8/lvs.8.html) program[^5]:
 
 ```
 # lvs -o lv_name,lv_size,data_percent
@@ -183,9 +183,9 @@ var                                       
 var-snapset_my-first-set_1768308252_-var     1.20g  0.19 
 ```
 
-Note the 0.19% value in the `Data%` column: this is the percentage of the snapshot exception store that has been used so far. In this case it's a very healthy value. If the value begins to approach 100% you need to take action using lvresize or snapm snapset resize in order to avoid the snapshot being invalidated.
+Note the 0.19% value in the `Data%` column: this is the percentage of the snapshot exception store that has been used so far. In this case it's a very healthy value. If the value begins to approach 100% you need to take action using [`lvresize(8)`](https://man7.org/linux/man-pages/man8/lvresize.8.html) or `snapm snapset resize` in order to avoid the snapshot being invalidated.
 
-We will discuss more comprehensive monitoring and maintenance strategies in later chapters. For now, use your regular storage administration tools (whether that is [`lvs(8)`](https://man7.org/linux/man-pages/man8/lvs.8.html) for LVM2 volumes, or the [`stratis(8)`](https://www.mankier.com/8/stratis) command for Stratis storage) to keep an eye on the space available to your snapshots. You can resize individual snapshots using the corresponding tool (for example, [`lvresize(8)`](https://man7.org/linux/man-pages/man8/lvresize.8.html) for LVM2), or you can use the `snapm snapset resize` command to apply new size policies to an already created snapshot set.
+We will discuss more comprehensive monitoring and maintenance strategies in later blog updates. For now, you can use your regular storage administration tools (whether that is [`lvs(8)`](https://man7.org/linux/man-pages/man8/lvs.8.html) for LVM2 volumes, or the [`stratis(8)`](https://www.mankier.com/8/stratis) command for Stratis storage), or the `snapm snapshot list` command to keep an eye on the space available to your snapshots. You can resize individual snapshots using the corresponding tool (for example, [`lvresize(8)`](https://man7.org/linux/man-pages/man8/lvresize.8.html) for LVM2), or you can use the `snapm snapset resize` command to apply new size policies to an already created snapshot set.
 
 ## Visualizing Changes
 
@@ -212,7 +212,7 @@ Built tree with 7 nodes
     └── [+] my-new-file.conf
 ```
 
-Note that `my-new-file.conf` appears with the `[+]` annotation (in red if your terminal supports color output) indicating that it is a new file system entry added since `my-first-set` was created.
+Note that `my-new-file.conf` appears with the `[+]` annotation (in green if your terminal supports color output) indicating that it is a new file system entry added since `my-first-set` was created.
 
 To see the exact change in the file content you can use the `-o/--output-format diff` option of the `snapm snapset diff` command:
 
@@ -233,11 +233,36 @@ There are two key details to notice here:
 * The `-o diff` output is displayed in *unified diff* format (again with color coding if your terminal supports that)
 * The results appear quickly when the second command is run. This is because the differences from the first run are cached and reused.
 
+To see all the differences found between the snapshot set and the live system, remove the `-i /etc/my-new-file.conf` argument and run the command again:
+
+```
+# snapm snapset diff my-first-set . -s /etc
+Gathering paths from my-first-set /etc: found 1879 paths
+Scanned 1879 paths in 0:00:00.662213 (excluded 0)
+Gathering paths from System Root /etc: found 1880 paths
+Scanned 1880 paths in 0:00:00.527266 (excluded 0)
+Found 7 differences in 0:00:00.012590
+Found 0 moves in 0:00:00.004542
+Saved 7 records to diffcache in 0:00:00.014054
+Built tree with 7 nodes
+/
+└── [*] etc
+    ├── lvm
+    │   ├── [*] archive
+    │   │   ├── [-] fedora_00018-1908271671.vg
+    │   │   └── [+] fedora_00028-486902226.vg
+    │   └── [*] backup
+    │       └── [*] fedora
+    └── [+] my-new-file.conf
+```
+
+Note that in this example we see changes in the `/etc/lvm` directory: we are using LVM2 on this system and this is a natural consequence of LVM2's default metadata archival and backup settings. Do not be concerned if you see similar changes on your system when trying this out. In this example we also see that the cache is not used - this is because the new `snapset diff` command is using different options.
+
 ## Conclusion
 
-That's it for now! We will look at more advanced uses of `snapm` and the full set of Difference Engine features in future blog posts. In the meantime check out the `snapm(8)` manual page and the [User Guide](https://snapm.readthedocs.io/en/latest/user_guide.html) if this post whetted your appetite for more Snapshot Manager features!
+That's it for now! We will look at more advanced uses of `snapm` and the full set of *Difference Engine* features in future blog posts. In the meantime check out the `snapm(8)` manual page and the [User Guide](https://snapm.readthedocs.io/en/latest/user_guide.html) if this post whetted your appetite for more Snapshot Manager features!
 
-If you would like to clean up the snapshot set on your system, use the `snapm snapset delete` command:
+If you would like to clean up and remove the snapshot set on your system, use the `snapm snapset delete` command:
 
 ```
 # snapm snapset delete my-first-set
